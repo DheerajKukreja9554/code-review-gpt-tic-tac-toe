@@ -1,20 +1,70 @@
-name: Code Review GPT
+# name: Code Review GPT
  
+# on:
+#   pull_request:
+#     branches: [main]
+ 
+# jobs:
+#   run_code_review:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#         with:
+#           fetch-depth: 0
+ 
+#       - name: Code Review GPT
+#         uses: mattzcarey/code-review-gpt@v0.1.4-alpha
+#         with:
+#           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+#           GITHUB_TOKEN: ${{ vars.GITHUBB_TOKEN }}
+#          MODEL: 'gpt-3.5-turbo'
+
+
+
+name: Code Review GPT
+
 on:
   pull_request:
     branches: [main]
- 
-jobs:
-  run_code_review:
+jobs:        
+  Review:
     runs-on: ubuntu-latest
+    container: mayankaz104/code-review-llmas:1.0.2
+    env:
+      PR_AUTHOR_GITHUB_ID: ${{ github.event.pull_request.user.login }}
+    permissions:
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
+      
+      - name: Find Github id of PR AUTHOR
+        run: |
+          echo "PR author: ${PR_AUTHOR_GITHUB_ID}"
+      - name: Checkout pull request HEAD
+        id: checkout_pr_head
+        uses: actions/checkout@v2
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
- 
-      - name: Code Review GPT
-        uses: mattzcarey/code-review-gpt@v0.1.4-alpha
+      - name: removing dubious ownership
+        shell: bash
+        run: git config --global safe.directory '*'
+      - name: print-diff
+        shell: bash
+        run: |
+          git fetch origin main
+          git diff origin/main..HEAD > difference_hunk.txt
+          find . -type f -name difference_hunk.txt
+          pwd
+          echo "difference hunk = "
+          cat difference_hunk.txt
+      - name: Run Python script
+        run: python /app/src/commenter.py
+      - name: Read PR comment from file
+        run: cat /app/src/files/output.txt > pr_comment.txt
+      - name: Add PR comment
+        uses: mshick/add-pr-comment@v2
         with:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GITHUB_TOKEN: ${{ vars.GITHUBB_TOKEN }}
-          MODEL: 'gpt-3.5-turbo'
+          message-path: pr_comment.txt
+          repo-directory: '/app/'
+          requirements-path: 'requirements.txt'    
